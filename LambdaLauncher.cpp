@@ -20,10 +20,12 @@
 #include <thread>
 #define CheckBox_SexAddon 1
 #define Lambda_Launch 2
-std::map<bool, std::string> Correlate;
 #define Scroll_Bar 3
+#define BlackThemeChechMark 4
+bool DarkThemeMode = false;
 HINSTANCE hInstance;
 
+HBRUSH hBrush = GetSysColorBrush(COLOR_WINDOW);
 HFONT hfont = CreateFont(-14, 0, 0, 0, FW_NORMAL, false, false, false, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable ");
 const UINT Width = 800;
 const UINT Height = 600;
@@ -31,12 +33,14 @@ const UINT Height = 600;
 HWND g_Scroll = NULL;
 HWND GameLaunchButton = NULL;
 HWND Object = NULL;
+HWND BlackThemeSwitch = NULL;
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
+   
     INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_STANDARD_CLASSES|ICC_WIN95_CLASSES};
     InitCommonControlsEx(&icex);
 	const wchar_t CLASS_NAME[] = L"Lambda Launcher";
@@ -46,7 +50,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = CLASS_NAME;
-
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClass(&wc);
     HWND hwnd = CreateWindowEx(0, CLASS_NAME, L"Lambda Launcher", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
     
@@ -54,6 +58,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     ShowWindow(hwnd, nCmdShow);
 
     SendMessage(GameLaunchButton, WM_SETFONT, (WPARAM)hfont, TRUE);
+    SendMessage(BlackThemeSwitch, WM_SETFONT, (WPARAM)hfont, TRUE);
     MSG msg = {};
     API::API_FUNCTIONS::Get_Addons();
     while (GetMessage(&msg, NULL, 0, 0) > 0)
@@ -70,15 +75,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE: {
         int i = 0;
-        g_Scroll = CreateWindowEx(0, L"SCROLLBAR", L"Scrollbar", WS_VISIBLE | WS_CHILD | SBS_VERT, Width - 20, 0, 20, Height, hwnd, (HMENU)(UINT_PTR)Scroll_Bar, hInstance, NULL);
-
+        g_Scroll = CreateWindowEx(0, L"SCROLLBAR", L"Scrollbar",  WS_CHILD | SBS_VERT, Width - 20, 0, 20, Height, hwnd, (HMENU)(UINT_PTR)Scroll_Bar, hInstance, NULL);
         GameLaunchButton = CreateWindowEx(0, L"BUTTON", L"Launch game", WS_CHILD | WS_VISIBLE, 100, 30, 100, 30, hwnd, (HMENU)(UINT_PTR)Lambda_Launch, hInstance, NULL);
+        
+       // BlackThemeSwitch = CreateWindowEx(0, L"BUTTON", L"Black Theme", BS_AUTOCHECKBOX | WS_CHILD | WS_VISIBLE, 100, 630, 180, 30, hwnd, (HMENU)(UINT_PTR)BlackThemeChechMark, hInstance, NULL); BlackTheme Support is depracated
+      
 
         for (const auto& [key, value] : API::API_FUNCTIONS::Get_Addons()) {
             i++;
             HMENU Checkbox = (HMENU)(INT_PTR)(1000 + i);
 
             HWND Object = CreateWindowExA(0, "BUTTON", key.c_str(), WS_CHILD | BS_AUTOCHECKBOX | WS_VISIBLE, 100, (30 + 10) * (i + 1), 180, 30, hwnd, Checkbox, hInstance, NULL);
+
             SetPropA(Object, key.c_str(), HANDLE(NULL));
             SendMessage(Object, WM_SETFONT, (WPARAM)hfont, TRUE);
             if (value == 0) {
@@ -121,8 +129,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             PostQuitMessage(0);
             return 0;
         }
+        else if (control_id == 4) {
+            LRESULT Checkboxy = SendMessageA(hW, BM_GETCHECK, 0, 0);
+            switch (Checkboxy) {
+            case BST_CHECKED: {
+                DarkThemeMode = true;
+                DeleteObject(hBrush);
+                hBrush = CreateSolidBrush(RGB(26, 26, 26));
+                InvalidateRect(hwnd, NULL, TRUE);
+                break;
+
+            };
+            case BST_UNCHECKED: 
+                DarkThemeMode = false; // For config
+                DeleteObject(hBrush);
+                hBrush = GetSysColorBrush(COLOR_WINDOW);
+                InvalidateRect(hwnd, NULL, TRUE);
+                break;
+
+            };
+        }
         break;
-        
     };
 
     case WM_DESTROY: {
@@ -135,7 +162,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         HDC hdc = BeginPaint(hwnd, &ps);
 
 
-        FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+        FillRect(hdc, &ps.rcPaint, hBrush);
 
 
 
@@ -146,15 +173,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_CTLCOLORSTATIC: {
         HDC hdc = (HDC)wParam;
         SetBkMode(hdc, TRANSPARENT);
-        return (LRESULT)GetStockObject(COLOR_WINDOW + 1);
+        SetTextColor(hdc, DarkThemeMode ? RGB(255, 255, 255) : RGB(0,0,0));
+        return (LRESULT)hBrush;
     };
 
     case WM_SIZE: {
         UINT Width = LOWORD(lParam);
         UINT Height = HIWORD(lParam);
         MoveWindow(g_Scroll, Width - 20, 0, 20, Height, SWP_NOACTIVATE | SWP_NOZORDER);
-        MoveWindow(GameLaunchButton, Width  - 200, Height - 80, 100, 40, SWP_NOACTIVATE | SWP_NOZORDER);
-        MoveWindow(Object, Width / 20, Height / 20, 100, 40, SWP_NOACTIVATE | SWP_NOZORDER);
+        MoveWindow(GameLaunchButton, (Width  / 1.15f) - Width / 100, Height - 80, 100, 40, SWP_NOACTIVATE | SWP_NOZORDER);
+        MoveWindow(BlackThemeSwitch, Width / 20, Height - 80, 180, 40, SWP_NOACTIVATE | SWP_NOZORDER);
     };
      return 0;
 
